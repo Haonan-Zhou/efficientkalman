@@ -2,6 +2,7 @@ library(Rcpp)
 library(RcppArmadillo)
 library(numDeriv)
 
+setwd("~/Box Sync/Studies/Cpp/RCpp/kalman/efficientkalman/")
 sourceCpp("kalmanRCpp_notest.cpp")
 
 k <- 100
@@ -10,7 +11,7 @@ r <- 0.2
 deltaT <- 0.1
 
 # Let's create some sample data:
-set.seed(12345)
+# set.seed(12345)
 
 obsVariance <- 25
 nObs = 1000
@@ -47,8 +48,8 @@ plot(1:nObs, y, type = "l", col = "black")
 lines(1:nObs, result$xfilt[,2], type = "l", col = "orange")
 lines(1:nObs, result$xsmooth[,2], type = "l", col = "red")
 
-plot(1:nObs, rep(r,1000), type = "l", col = "black")
-lines(1:nObs, result$xfilt[,1], type = "l", col = "orange")
-lines(1:nObs, result$xsmooth[,1], type = "l", col = "red")
+# plot(1:nObs, rep(r,1000), type = "l", col = "black")
+# lines(1:nObs, result$xfilt[,1], type = "l", col = "orange")
+# lines(1:nObs, result$xsmooth[,1], type = "l", col = "red")
 
 
