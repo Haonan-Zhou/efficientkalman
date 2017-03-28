@@ -20,9 +20,9 @@ using namespace Rcpp;
 // [[Rcpp::depends(RcppArmadillo)]]
 // [[Rcpp::export]]
 List kalmanC(const arma::colvec& x0, const arma::mat& y, 
-             const arma::mat& Sigma0, const arma::mat& Phi, 
-             const arma::mat& A, const arma::mat& Q, const arma::mat& R, 
-             bool smooth){
+                 const arma::mat& Sigma0, const arma::mat& Phi, 
+                 const arma::mat& A, const arma::mat& Q, const arma::mat& R, 
+                 bool smooth){
   
   // Declare variables to use
   arma::mat P = Sigma0;
@@ -114,37 +114,13 @@ List kalmanC(const arma::colvec& x0, const arma::mat& y,
 }
 
 
-
-// Simple Test
-/*** R
-
-# Simple Local Level Model
-nn = 1000
-
-w = rnorm(nn+1, 0, 1)
-  v = rnorm(nn, 0, 1)
-  
-  x = cumsum(w)
-  mu0 = x[1]
-x = x[-1]
-w = w[-1]
-y = x + v
-  
-xfiltered = kalmanC(mu0,as.matrix(y), diag(1), diag(1), diag(1), diag(1), diag(1),T)
-
-plot(1:nn, x, ylim= c(min(x)-1, max(x)+1), xlab = "Time", ylab = "True x value")
-lines(xfiltered$xfilt[,1], col="blue")
-lines(xfiltered$xsmooth[,1], col="orange")
-*/
-
-
 // For our extended Kalman, each step needs to call R function to make prediction and 
 // perform Jacobian calculation.
 
 // [[Rcpp::export]]
 List extkalmanC(const arma::colvec& x0, const arma::mat& y, 
-                const arma::mat& Sigma0, const arma::mat& Q, const arma::mat& R, 
-                bool smooth, Function f, Function h){
+             const arma::mat& Sigma0, const arma::mat& Q, const arma::mat& R, 
+             bool smooth, Function f, Function h){
   Environment numDeriv("package:numDeriv");
   Function jacobian = numDeriv["jacobian"];
   
@@ -262,29 +238,3 @@ List extkalmanC(const arma::colvec& x0, const arma::mat& y,
                         Named("Phismooth") = wrap(Phismoothfield));
   }
 }
-
-// Simple Test
-/*** R
-
-# Simple Local Level Model
-nn = 1000
-
-w = rnorm(nn+1, 0, 1)
-v = rnorm(nn, 0, 1)
-  
-x = cumsum(w)
-mu0 = x[1]
-x = x[-1]
-w = w[-1]
-y = x + v
-
-f = function(x){
-  return(x)
-}
-
-xfiltered = extkalmanC(mu0,as.matrix(y), diag(1), diag(1), diag(1),T, f, f)
-
-plot(1:nn, x, ylim= c(min(x)-1, max(x)+1), xlab = "Time", ylab = "True x value")
-lines(xfiltered$xfilt[,1], col="blue")
-lines(xfiltered$xsmooth[,1], col="orange")
-*/
