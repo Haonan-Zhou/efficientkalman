@@ -1,7 +1,7 @@
 /*
 Efficient Kalman - Linear and Extended Kalman Filter
 Haonan Zhou
-v0.1, 03/26/2017
+v0.1.1, 03/28/2017
 
 This code interacts with R interface and implements Kalman Filter and Smoother 
 through the usage of Rcpp and RcppArmadillo. 
@@ -13,7 +13,7 @@ To do's:
 - Further debugging. 
 */
 
-
+#include <iostream>
 #include <RcppArmadillo.h>
 using namespace Rcpp;
 
@@ -40,6 +40,7 @@ List kalmanC(const arma::colvec& x0, const arma::mat& y,
   arma::colvec eps(k);
   arma::mat Sigma(k,k);
   
+  int err = 0;
   double ll = 0;
   
   arma::cube Ppredfield(xn,xn,k);
@@ -47,6 +48,7 @@ List kalmanC(const arma::colvec& x0, const arma::mat& y,
   
   // Filter (forward)
   for (arma::uword i = 0; i < k; ++i){
+    err = 0;
     // Forecasting step
     xpred_temp = Phi * x;
     xpred.row(i) = xpred_temp.t();
@@ -54,7 +56,13 @@ List kalmanC(const arma::colvec& x0, const arma::mat& y,
     
     // Update step
     Sigma = A * Ppred * A.t() + R;
-    K = Ppred * A.t() * inv(Sigma);
+    try {
+      K = Ppred * A.t() * arma::inv(Sigma);
+    } catch (const std::exception &exc){
+      K = Ppred * A.t() * arma::pinv(Sigma);
+      Rcout << "Singular state covariance matrix detected, use generalized inverse instead." << std::endl;
+      int err = 1;
+    }
     
     eps = y.row(i) - A * xpred_temp;
     x = xpred_temp + K * eps; 
@@ -66,7 +74,11 @@ List kalmanC(const arma::colvec& x0, const arma::mat& y,
     double val;
     double sign;
     arma::log_det(val, sign, Sigma);
-    ll += arma::as_scalar(eps.t() * arma::inv(Sigma) * eps) + val*sign;
+    if (err == 0){
+      ll += arma::as_scalar(eps.t() * arma::inv(Sigma) * eps) + val*sign;
+    } else{
+      ll += arma::as_scalar(eps.t() * arma::pinv(Sigma) * eps) + val*sign;
+    }
     
     // Store all objects into corresponding fields
     Pmatfield.slice(i) = P;
@@ -94,7 +106,12 @@ List kalmanC(const arma::colvec& x0, const arma::mat& y,
     xsmooth.row(k-1) = xmat.row(k-1);
     
     for (arma::uword j = k-1; j > 0; j--){
-      J = Pmatfield.slice(j-1) * Phi.t() * arma::inv(Ppredfield.slice(j));
+      try {
+        J = Pmatfield.slice(j-1) * Phi.t() * arma::inv(Ppredfield.slice(j));
+      } catch (const std::exception &exc){
+        J = Pmatfield.slice(j-1) * Phi.t() * arma::pinv(Ppredfield.slice(j));
+        Rcout << "Singular matrix detected, use generalized inverse instead." << std::endl;
+      }
       xsmooth_temp = xmat.row(j-1).t() + J * (xsmooth.row(j).t() - xpred.row(j).t());
       xsmooth.row(j-1) = xsmooth_temp.t();
       Psmooth = Pmatfield.slice(j-1) + J * (Psmoothfield.slice(j) - Ppredfield.slice(j)) * J.t();
@@ -141,6 +158,7 @@ List extkalmanC(const arma::colvec& x0, const arma::mat& y,
   arma::mat Sigma(k,k);
   
   double ll = 0;
+  int err = 0;
   
   arma::cube Ppredfield(xn,xn,k);
   arma::cube Pmatfield(xn,xn,k);
@@ -153,6 +171,7 @@ List extkalmanC(const arma::colvec& x0, const arma::mat& y,
   
   // Filter (forward)
   for (arma::uword i = 0; i < k; ++i){
+    err = 0;
     // Forecasting step
     
     // For extended filter: evaluate function f and calculate Jacobian
@@ -166,7 +185,14 @@ List extkalmanC(const arma::colvec& x0, const arma::mat& y,
     A = as<arma::mat>(jacobian(_["func"] = h, _["x"] = xpred_temp));
     
     Sigma = A * Ppred * A.t() + R;
-    K = Ppred * A.t() * inv(Sigma);
+    
+    try {
+      K = Ppred * A.t() * arma::inv(Sigma);
+    } catch (const std::exception &exc){
+      K = Ppred * A.t() * arma::pinv(Sigma);
+      Rcout << "Singular state covariance matrix detected, use generalized inverse instead." << std::endl;
+      err = 1;
+    }
     
     eps = y.row(i) - A * xpred_temp;
     x = xpred_temp + K * eps; 
@@ -178,7 +204,11 @@ List extkalmanC(const arma::colvec& x0, const arma::mat& y,
     double val;
     double sign;
     arma::log_det(val, sign, Sigma);
-    ll += arma::as_scalar(eps.t() * arma::inv(Sigma) * eps) + val*sign;
+    if (err == 0){
+      ll += arma::as_scalar(eps.t() * arma::inv(Sigma) * eps) + val*sign;
+    } else{
+      ll += arma::as_scalar(eps.t() * arma::pinv(Sigma) * eps) + val*sign;
+    }
     
     // Store all objects into corresponding fields
     Pmatfield.slice(i) = P;
@@ -211,13 +241,20 @@ List extkalmanC(const arma::colvec& x0, const arma::mat& y,
     xsmooth.row(k-1) = xmat.row(k-1);
     
     arma::cube Phismoothfield(xn, xn, k);
+    Phismoothfield.slice(k-1) = Phifield.slice(k-1);
+    
     arma::mat Phismooth(xn, xn);
     
     for (arma::uword j = k-1; j > 0; j--){
       // Evaluate function
       Phismooth = Phifield.slice(j);
-      
-      J = Pmatfield.slice(j-1) * Phismooth.t() * arma::inv(Ppredfield.slice(j));
+      try {
+        J = Pmatfield.slice(j-1) * Phismooth.t() * arma::inv(Ppredfield.slice(j));
+      } catch (const std::exception &exc){
+        J = Pmatfield.slice(j-1) * Phismooth.t() * arma::pinv(Ppredfield.slice(j));
+        Rcout << "Singular matrix detected, use generalized inverse instead." << std::endl;
+      }
+
       xsmooth_temp = xmat.row(j-1).t() + J * (xsmooth.row(j).t() - xpred.row(j).t());
       xsmooth.row(j-1) = xsmooth_temp.t();
       Psmooth = Pmatfield(j-1) + J * (Psmoothfield.slice(j) - Ppredfield.slice(j)) * J.t();

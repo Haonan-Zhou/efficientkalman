@@ -3,7 +3,7 @@ library(RcppArmadillo)
 library(numDeriv)
 
 setwd("~/Box Sync/Studies/Cpp/RCpp/kalman/efficientkalman/")
-sourceCpp("kalmanRCpp_notest.cpp")
+# sourceCpp("kalmanRCpp_notest.cpp")
 
 k <- 100
 p0 <- 0.1*k
